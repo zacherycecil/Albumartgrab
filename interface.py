@@ -3,6 +3,7 @@ from tkinter import *
 from tkinter import filedialog
 from tkinter import ttk
 import urllib.request
+from urllib.request import Request, urlopen
 import shutil
 import requests
 import re
@@ -10,9 +11,10 @@ import os
 import sys
 from scrollable import VerticalScrolledFrame
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import *
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def add_text(str):
     var.set(str + "\n" + var.get())
@@ -27,46 +29,61 @@ def browse_button():
     folder_path.set(mypath)
     button2['state'] = "disabled"
     
-    error = ""
+    error = "-"
     with os.scandir(mypath) as entries:
         for entry in entries:
             with os.scandir(os.path.join(mypath, entry)) as albums:
                 for album in albums:
                     entry_path = os.path.join(mypath, entry)
                     album_path = os.path.join(entry_path, album)
-                    if os.path.isdir(os.path.join(mypath, entry.name + "\\" + album.name)):
+                    if entry_path != mypath + '\\test' and os.path.isdir(os.path.join(mypath, entry.name + "\\" + album.name)):
 
-                        if os.path.isfile(os.path.join(mypath, entry.name + "\\" + album.name + "\\cover.jpg")) is False:
+                        # if os.path.isfile(os.path.join(mypath, entry.name + "\\" + album.name + "\\cover.jpg")) is False:
 
-                            try:
+                           try:
+
+                                query = "https://api.discogs.com/database/search?release_title=" + album.name + "&artist=" + entry.name + "&type=master&key={}&secret={}".format(str(os.environ["KEY"]), str(os.environ["SECRET"]))
                                 
-                                query = (entry.name + "+" + album.name).replace(" ", "+")
+                                query = query.replace(' ', '%20')
+                                print(query)
+                                x = requests.get(query)
+                                print(x)
 
-                                add_text("Accessing https://musicbrainz.org/search?query=" + query + "&type=release_group&method=indexed")
+                                url = x.json()['results'][0]['cover_image']
+                                print(url)
 
-                                x= requests.get("https://musicbrainz.org/search?query=" + query + "&type=release_group&method=indexed")
-                                match = re.search('<a href="\/release-group\/\w{8}-\w{4}-\w{4}-\w{4}-\w{12}', x.text)[0]
-                                mbid = match[len(match)-36:]
+                                # query = (entry.name + "+" + album.name).replace(" ", "+")
+                                # add_text("Accessing https://musicbrainz.org/search?query=" + query + "&type=release_group&method=indexed")
+                                # x = requests.get("https://musicbrainz.org/search?query=" + query + "&type=release_group&method=indexed")
+                                # match = re.search('<a href="\/release-group\/\w{8}-\w{4}-\w{4}-\w{4}-\w{12}', x.text)[0]
+                                # mbid = match[len(match)-36:]
+                                # url = "https://coverartarchive.org/release-group/" + mbid + "/front-500"
+                                # add_text("Accessing https://coverartarchive.org/release-group/" + mbid + "/front")
 
-                                url = "https://coverartarchive.org/release-group/" + mbid + "/front-500"
                                 file_name = mypath + "\\" + entry.name + "\\" + album.name + "\\cover.jpg"
 
-                                add_text("Accessing https://coverartarchive.org/release-group/" + mbid + "/front")
 
-                                with urllib.request.urlopen(url) as response, open(file_name, 'wb') as out_file:
+                                
+                                req = Request(
+                                    url=x.json()['results'][0]['cover_image'],
+                                    headers={'User-Agent': 'Mozilla/5.0'}
+                                )
+                                
+                                filename2 = mypath + '\\test\\' + album.name + ".jpg"
+
+                                with urllib.request.urlopen(req) as response, open(file_name, 'wb') as out_file, open(filename2, 'wb+') as test123:
                                     shutil.copyfileobj(response, out_file)
+                                    shutil.copyfile(file_name, filename2)
                                     
                                 add_text("Added art for " + entry.name + " - " + album.name)
                                 
-                            except:
-                                error += entry.name + " - " + album.name + "\n"
+                           except:
+                                error += "\t" + entry.name + " - " + album.name + "\n"
 
-                        else:
-                            add_text("Skipping " + entry.name + " - " + album.name + ", cover exists.")
-                    else:
-                        add_text("Issue with directory structure.")
+                    elif os.path.samefile(entry_path, mypath + '\\test') == False:
+                        add_text("Issue with directory structure for " + entry.name + "\\" + album.name)
         button2['state'] = 'active'
-        add_text(error)
+        add_text("Could not download:\n" + error)
 
 
 root = Tk()
